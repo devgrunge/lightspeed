@@ -1,53 +1,53 @@
-name: Deploy Proxy
+name: Build & Deploy LightSpeed Proxy
 
 on:
   push:
-    branches: [ master ]
-    paths:
-      - 'proxy/**'
-      - 'protocol/**'
-      # The deploy builds the CLI client as its control-plane probe
-      # (`lightspeed --features quic`, see lightspeed_resolve_probe in
-      # infra/scripts/deploy.sh) and the canary gate refuses to deploy if that
-      # probe cannot register. A client-only fix (for example the rustls
-      # provider change) therefore changes the deploy's own verification path
-      # and must retrigger a deploy, or the fix never reaches production.
-      # Scoped to client/** only: client-gui is not part of the probe.
-      - 'client/**'
-      - 'infra/scripts/deploy.sh'
-      - 'infra/scripts/relay-install.sh'
-      - 'infra/scripts/relay-updater.sh'
-      - 'infra/scripts/lib-nodes.sh'
+    branches: [master]
   workflow_dispatch:
 
-concurrency:
-  group: deploy-production
-  cancel-in-progress: false
+permissions:
+  contents: read
+  packages: write
 
 jobs:
-  deploy:
-    name: Build & Deploy
+  build-and-deploy:
     runs-on: ubuntu-latest
-    
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v7
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Setup Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
         with:
-          targets: x86_64-unknown-linux-gnu
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install System Dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential libpcap-dev
+      - name: Build and push proxy image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}-proxy:latest
+            ghcr.io/${{ github.repository }}-proxy:${{ github.sha }}
 
-      - name: Setup SSH Key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/lightspeed_deploy
-          chmod 600 ~/.ssh/lightspeed_deploy
-
-      - name: Build and Deploy Proxy
-        run: |
-          chmod +x infra/scripts/deploy.sh
-          ./infra/scripts/deploy.sh
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            cd /root/lightspeed
+            docker compose pull
+            docker compose up -d
+            docker logout ghcr.io
+            echo "Deployed ghcr.io/${{ github.repository }}-proxy:latest"
