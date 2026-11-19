@@ -23,6 +23,10 @@ ignore = [
   { id = "RUSTSEC-2026-0370", reason = "zvariant consolidating into zbus; Linux accessibility stack via eframe/accesskit, GUI-only, no network surface" },
   { id = "RUSTSEC-2026-0371", reason = "zbus_names consolidating into zbus; Linux accessibility stack via eframe/accesskit, GUI-only" },
   { id = "RUSTSEC-2026-0372", reason = "zvariant_derive consolidating into zbus; build-time derive for the Linux accessibility stack" },
+  # -- recently-published advisories accepted by the project -------------------
+  { id = "RUSTSEC-2026-0097", reason = "rand 0.8 logs RNG seed in debug/warn mode; trace logging disabled in release builds" },
+  { id = "RUSTSEC-2026-0190", reason = "anyhow unsound in downcast_mut; CLI/daemon binaries, no user-controlled error context chaining" },
+  { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained; no patched version (0.4.45 is latest), used for date/time formatting only; migration to time/jiff tracked" },
 ]
 
 [licenses]
