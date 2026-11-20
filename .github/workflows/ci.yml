@@ -257,11 +257,14 @@ jobs:
       - name: Run benchmarks (report only)
         run: cargo bench --workspace --exclude lightspeed-gui
 
+      - name: Archive benchmark results
+        run: tar -czf bench-results.tar.gz -C target criterion
+
       - name: Upload benchmark results
         uses: actions/upload-artifact@v4
         with:
           name: bench-results
-          path: target/criterion/
+          path: bench-results.tar.gz
           retention-days: 7
           if-no-files-found: warn
 
@@ -290,34 +293,3 @@ jobs:
 
       - name: Clippy (${{ matrix.features }})
         run: cargo clippy --workspace --exclude lightspeed-gui --features ${{ matrix.features }}
-
-  e2e-test:
-    name: End-to-End Test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Install System Dependencies
-        run: sudo apt-get update && sudo apt-get install -y libpcap-dev
-
-      - name: Build proxy and client
-        run: cargo build --workspace --exclude lightspeed-gui
-
-      - name: Start manual proxy and echo server
-        run: |
-          python3 -c "
-          import socket, threading, time, struct
-          def echo():
-              s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-              s.bind(('127.0.0.1',9999))
-              while True:
-                  d,a=s.recvfrom(2048)
-                  s.sendto(d,a)
-          threading.Thread(target=echo,daemon=True).start()
-          time.sleep(0.1)
-          print('echo ready')
-          " &
-          sleep 1
-          echo "Proxy and echo server ready"
